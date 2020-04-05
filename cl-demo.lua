@@ -3,7 +3,10 @@ printf = function(s,...)
   return io.write(s:format(...))
 end
 
+ -- run without creating images, to test wthout image library and only cl.lua
+if arg[1] ~= "noimg" then
 require "gd"
+end
 
 ffi = require( "ffi" )
 cl  = require( "cl" )
@@ -382,7 +385,7 @@ fractN=2;
 
 local function clset(devidx)
 	local timeb=os.time();
-
+   platform_devices = {}
    devices = {}
    for platform_index, platform in pairs(clGetPlatforms()) do
       platform_devices = clGetDevices(platform.id)
@@ -400,6 +403,7 @@ local function clset(devidx)
 --   devidx = 0
 --   print( "You chose device index " .. devidx .. " of [0.." .. #devices - 1 .. "]" )
    if devidx < 0 or devidx >= #devices then
+     dump(platform_devices); print("devices #" .. #platform_devices);
       error( "ERROR: ".. #devices .. " devices found. Choose from 0.." .. #devices - 1 .. "!" )
    end
    ffi_device = ffi.new( "cl_device_id[1]", ffi_devices[devidx+1] )
@@ -477,17 +481,22 @@ local function demo1( devidx, fractal, imagename, ix, iy )
    local work_group_size = math.floor(devices[devidx+1].max_work_group_size/2); -- 512; -- work_group_info.work_group_size
 	print(imagename .. " build time = " .. os.time()-timeb);
    local results = ffi.new("float[?]", count)
+   printf(" mem buffers: " .. (ffi.sizeof(results)+ffi.sizeof(input)+ffi.sizeof(output)) .. " " )
 
    local red, green, blue, maxcolor, c16, red2, crange;
    local color={}
    c16=256*256; maxcolor=256*c16; crange=math.floor(maxcolor/(data[6]*3));
 --   print(count .. "," .. yh);
-   Im = gd.createTrueColor(count, yh);
+   if arg[1] ~= "noimg" then
+    Im = gd.createTrueColor(count, yh);
+   end
    color[1]=crange*11+85; -- printf("color1,");
    for i=2,data[6],1 do color[i]=color[i-1]+crange;
 	 green=math.floor(color[i]/c16); red2=color[i]-(green*c16);
 	 red=math.floor(red2/256); blue=red2-(red*256);
+    if arg[1] ~= "noimg" then
      color[i]=Im:colorAllocate(red, green, blue); -- printf(i .. ",");
+    end
    end
 
    timeb=os.time();
@@ -499,7 +508,9 @@ local function demo1( devidx, fractal, imagename, ix, iy )
    CHK(cl.clEnqueueReadBuffer(commands, output, cl.CL_TRUE, 0, ffi.sizeof(results), results, 0, nil, nil))
     for i=0,count-1 do
 	 if results[i] >= 1 and results[i] <= data[6] then
-       Im:setPixel(i+1, j+1, color[results[i]]);
+    if arg[1] ~= "noimg" then
+     Im:setPixel(i+1, j+1, color[results[i]]);
+    end
 	 else print("error: " .. results[i]); end
     end
    end
@@ -508,9 +519,15 @@ local function demo1( devidx, fractal, imagename, ix, iy )
 --   for i=0,count-1 do io.stdout:write(i .. ": " .. results[i] .. '\t') end
 --   io.stdout:write("\n")
 	print("run time = " .. timec);
-	for i=1,data[6],1 do Im:setPixel(i,1,color[i]); end
+  if arg[1] ~= "noimg" then
+ 	 for i=1,data[6],1 do Im:setPixel(i,1,color[i]); end
     Im:png( imagename );
+  end
 
+  if arg[2] == "quit" then
+   return;
+  end
+  
    clReleaseMemObject(input);
    clReleaseMemObject(output);
    clReleaseProgram(program);
@@ -542,6 +559,9 @@ cFuns=C_Pow .. C_Log; cVers=C_Ver .. C_VerP2 .. C_VerP3;
 ix=-5/6; iy=5/27; fractN=9;
 clset(0)
 demo1(0, JuliaLog10, "spirl01.png", ix, iy);
+
+if not arg[2] or arg[2] ~= "quit" then
+
 cVers=C_Ver .. C_VerP2;
 ix=-10/13; iy=1/12; fractN=-5;
 demo1(0, JuliaLog, "spirl02.png", ix, iy);
@@ -683,4 +703,5 @@ demo1(1, BaseSin .. JuliaCube, "spir47.png", ix, iy);
 demo1(1, BaseSina .. JuliaCube, "spir48.png", ix, iy);
 demo1(1, BaseSinh .. JuliaCube, "spir49.png", ix, iy);
 demo1(1, BaseTan .. JuliaCube, "spir50.png", ix, iy);
+end
 --[[]]
